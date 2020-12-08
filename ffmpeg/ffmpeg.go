@@ -21,9 +21,9 @@ import (
 type Transcoder struct {
 	config           *Config
 	input            string
-	output           string
-	options          []string
-	metadata         *Metadata
+	output           []string
+	options          [][]string
+	metadata         transcoder.Metadata
 	inputPipeReader  *io.ReadCloser
 	outputPipeReader *io.ReadCloser
 	inputPipeWriter  *io.WriteCloser
@@ -50,16 +50,36 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	}
 
 	// Get file metadata
-	_, err := t.getMetadata()
+	_, err := t.GetMetadata()
 	if err != nil {
 		return nil, err
 	}
 
-	// Get executable flags
+	// Append input file and standard options
 	args := append([]string{"-i", t.input}, opts.GetStrArguments()...)
+	outputLength := len(t.output)
+	optionsLength := len(t.options)
 
-	// Append output flag
-	args = append(args, []string{t.output}...)
+	if outputLength == 1 && optionsLength == 0 {
+		// Just append the 1 output file we've got
+		args = append(args, t.output[0])
+	} else {
+		for index, out := range t.output {
+			// Get executable flags
+			// If we are at the last output file but still have several options, append them all at once
+			if index == outputLength-1 && outputLength < optionsLength {
+				for i := index; i < len(t.options); i++ {
+					args = append(args, t.options[i]...)
+				}
+				// Otherwise just append the current options
+			} else {
+				args = append(args, t.options[index]...)
+			}
+
+			// Append output flag
+			args = append(args, out)
+		}
+	}
 
 	// Initialize command
 	cmd := exec.Command(t.config.FfmpegBinPath, args...)
@@ -106,7 +126,7 @@ func (t *Transcoder) Input(arg string) transcoder.Transcoder {
 
 // Output ...
 func (t *Transcoder) Output(arg string) transcoder.Transcoder {
-	t.output = arg
+	t.output = append(t.output, arg)
 	return t
 }
 
@@ -128,9 +148,15 @@ func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.
 	return t
 }
 
-// WithOptions ...
+// WithOptions Sets the options object
 func (t *Transcoder) WithOptions(opts transcoder.Options) transcoder.Transcoder {
-	t.options = opts.GetStrArguments()
+	t.options = [][]string{opts.GetStrArguments()}
+	return t
+}
+
+// WithAdditionalOptions Appends an additional options object
+func (t *Transcoder) WithAdditionalOptions(opts transcoder.Options) transcoder.Transcoder {
+	t.options = append(t.options, opts.GetStrArguments())
 	return t
 }
 
@@ -144,14 +170,29 @@ func (t *Transcoder) validate() error {
 		return errors.New("missing input option")
 	}
 
-	if t.output == "" {
+	outputLength := len(t.output)
+
+	if outputLength == 0 {
 		return errors.New("missing output option")
+	}
+
+	// length of output files being greater than length of options would produce an invalid ffmpeg command
+	// unless there is only 1 output file, which obviously wouldn't be a problem
+	if outputLength > len(t.options) && outputLength != 1 {
+		return errors.New("number of options and output files does not match")
+	}
+
+	for index, output := range t.output {
+		if output == "" {
+			return fmt.Errorf("output at index %d is an empty string", index)
+		}
 	}
 
 	return nil
 }
 
-func (t *Transcoder) getMetadata() (metadata *Metadata, err error) {
+// GetMetadata Returns metadata for the specified input file
+func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
 
 	if t.config.FfprobeBinPath != "" {
 		var outb, errb bytes.Buffer
@@ -172,6 +213,8 @@ func (t *Transcoder) getMetadata() (metadata *Metadata, err error) {
 		if err != nil {
 			return nil, fmt.Errorf("error executing (%s) with args (%s) | error: %s | message: %s %s", t.config.FfprobeBinPath, args, err, outb.String(), errb.String())
 		}
+
+		var metadata Metadata
 
 		if err = json.Unmarshal([]byte(outb.String()), &metadata); err != nil {
 			return nil, err
@@ -256,7 +299,7 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 			}
 
 			timesec := utils.DurToSec(currentTime)
-			dursec, _ := strconv.ParseFloat(t.metadata.Format.Duration, 64)
+			dursec, _ := strconv.ParseFloat(t.metadata.GetFormat().GetDuration(), 64)
 
 			progress := (timesec * 100) / dursec
 			Progress.Progress = progress
