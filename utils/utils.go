@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// DurToSec ...
-func DurToSec(dur string) (sec float64) {
-	durAry := strings.Split(dur, ":")
+// DurationToSeconds converts a string based duration to a number of seconds
+func DurationToSeconds(d string) (sec float64) {
+	durAry := strings.Split(d, ":")
 	var secs float64
 	if len(durAry) != 3 {
 		return

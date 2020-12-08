@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/floostack/transcoder"
-	"github.com/floostack/transcoder/utils"
+	"github.com/dreamvo/transcoder"
+	"github.com/dreamvo/transcoder/utils"
 )
 
 // Transcoder ...
@@ -82,13 +82,13 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	}
 
 	// Initialize command
-	cmd := exec.Command(t.config.FfmpegBinPath, args...)
+	cmd := exec.Command(t.config.FFmpegBinPath, args...)
 
 	// If progresss enabled, get stderr pipe and start progress process
 	if t.config.ProgressEnabled && !t.config.Verbose {
 		stderrIn, err = cmd.StderrPipe()
 		if err != nil {
-			return nil, fmt.Errorf("Failed getting transcoding progress (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+			return nil, fmt.Errorf("Failed getting transcoding progress (%s) with args (%s) with error %s", t.config.FFmpegBinPath, args, err)
 		}
 	}
 
@@ -99,7 +99,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	// Start process
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("Failed starting transcoding (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+		return nil, fmt.Errorf("Failed starting transcoding (%s) with args (%s) with error %s", t.config.FFmpegBinPath, args, err)
 	}
 
 	if t.config.ProgressEnabled && !t.config.Verbose {
@@ -162,7 +162,7 @@ func (t *Transcoder) WithAdditionalOptions(opts transcoder.Options) transcoder.T
 
 // validate ...
 func (t *Transcoder) validate() error {
-	if t.config.FfmpegBinPath == "" {
+	if t.config.FFmpegBinPath == "" {
 		return errors.New("ffmpeg binary path not found")
 	}
 
@@ -192,9 +192,9 @@ func (t *Transcoder) validate() error {
 }
 
 // GetMetadata Returns metadata for the specified input file
-func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
+func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 
-	if t.config.FfprobeBinPath != "" {
+	if t.config.FFprobeBinPath != "" {
 		var outb, errb bytes.Buffer
 
 		input := t.input
@@ -205,13 +205,13 @@ func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
 
 		args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
 
-		cmd := exec.Command(t.config.FfprobeBinPath, args...)
+		cmd := exec.Command(t.config.FFprobeBinPath, args...)
 		cmd.Stdout = &outb
 		cmd.Stderr = &errb
 
 		err := cmd.Run()
 		if err != nil {
-			return nil, fmt.Errorf("error executing (%s) with args (%s) | error: %s | message: %s %s", t.config.FfprobeBinPath, args, err, outb.String(), errb.String())
+			return nil, fmt.Errorf("error executing (%s) with args (%s) | error: %s | message: %s %s", t.config.FFprobeBinPath, args, err, outb.String(), errb.String())
 		}
 
 		var metadata Metadata
@@ -298,10 +298,10 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 				}
 			}
 
-			timesec := utils.DurToSec(currentTime)
-			dursec, _ := strconv.ParseFloat(t.metadata.GetFormat().GetDuration(), 64)
+			seconds := utils.DurationToSeconds(currentTime)
+			durationSec, _ := strconv.ParseFloat(t.metadata.GetFormat().GetDuration(), 64)
 
-			progress := (timesec * 100) / dursec
+			progress := (seconds * 100) / durationSec
 			Progress.Progress = progress
 
 			Progress.CurrentBitrate = currentBitrate

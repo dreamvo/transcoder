@@ -1,9 +1,9 @@
 package ffmpeg
 
-// Config ...
+// Config represent the high-level config options
 type Config struct {
-	FfmpegBinPath   string
-	FfprobeBinPath  string
+	FFmpegBinPath   string
+	FFprobeBinPath  string
 	ProgressEnabled bool
 	Verbose         bool
 }
